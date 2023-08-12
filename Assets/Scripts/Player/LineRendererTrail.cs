@@ -11,24 +11,13 @@ public class LineRendererTrail : MonoBehaviour
     [SerializeField] private float _endWidth;
     [SerializeField] private float _endAlpha;
 
-    private bool _isFullLength;
+    private Vector3[] _positions;
+    private int _vertexCount;
     private float _timer;
 
     private void Update()
     {
-        if (!TryGetComponent(out LineRenderer lr)) return;
-
-        Vector3[] positions = new Vector3[lr.positionCount + 1];
-        lr.GetPositions(positions);
-
-        if (!_isFullLength)
-        {
-            float currentLength = transform.position.x - positions[lr.positionCount - 1].x + 0.01f;
-            if (currentLength > _trailLength)
-            {
-                _isFullLength = true;
-            }
-        }
+        if ((Time.timeScale == 0f) || !TryGetComponent(out LineRenderer lr)) return;
 
         _timer += Time.deltaTime;
         float vertexTime = _minVertexDist / _speedScOb.Speed;
@@ -37,43 +26,37 @@ public class LineRendererTrail : MonoBehaviour
         {
             _timer = 0f;
 
-            if (!_isFullLength)
+            _vertexCount++;
+            for (int i = _vertexCount - 1; i > 0; i--)
             {
-                lr.positionCount++;
-            }
-
-            for (int i = lr.positionCount - 1; i > 0; i--)
-            {
-                positions[i] = positions[i - 1];
+                _positions[i] = _positions[i - 1];
             }
         }
 
-        int end = lr.positionCount - 1;
-        for (int i = 1; i < lr.positionCount; i++)
+        float leftmostX = transform.position.x - _trailLength;
+        for (int i = 1; i < _vertexCount; i++)
         {
-            positions[i].x -= _speedScOb.Speed * Time.deltaTime;
+            _positions[i].x -= _speedScOb.Speed * Time.deltaTime;
 
-            if (positions[i].x < transform.position.x - _trailLength)
+            if (_positions[i].x < leftmostX)
             {
-                positions[i].x = transform.position.x - _trailLength;
-                end = i;
+                float t = Mathf.InverseLerp(_positions[i].x, _positions[i - 1].x, leftmostX);
+                _positions[i] = Vector3.Lerp(_positions[i], _positions[i - 1], t);
+                _vertexCount = i + 1;
                 break;
             }
         }
 
-        lr.positionCount = end + 1;
-        positions[0] = transform.position;
-
-        if (_isFullLength)
-        {
-            positions[lr.positionCount - 1].x = transform.position.x - _trailLength;
-        }
-
-        lr.SetPositions(positions);
+        _positions[0] = transform.position;
+        lr.positionCount = _vertexCount;
+        lr.SetPositions(_positions);
     }
 
     private IEnumerator Start()
     {
+        _vertexCount = 1;
+        int posCount = (int)(_trailLength / _minVertexDist) + 2;
+        _positions = new Vector3[posCount];
         LineRenderer lr = GetComponent<LineRenderer>();
         Color color = Color.white;
         float totalTime = _trailLength / _speedScOb.Speed;
